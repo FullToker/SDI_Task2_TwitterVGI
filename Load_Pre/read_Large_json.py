@@ -72,7 +72,7 @@ class TwitterProcessor:
         """判断是否为英国推文"""
         # 方法1: 检查place字段的country_code
         place = tweet.get('place')
-        if place and place.get('country_code') == 'UK':
+        if place and place.get('country_code') == 'GB':
             return True
             
         # 方法2: 检查user的location信息（备用）
