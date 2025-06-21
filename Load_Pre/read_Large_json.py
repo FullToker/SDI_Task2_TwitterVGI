@@ -4,6 +4,22 @@ import json
 from datetime import datetime
 import sys
 from pathlib import Path
+from time_format import compare_date, compare_by_date_range
+
+month_map = {
+            'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+            'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+        }
+num_month_map = {value: key for key, value in month_map.items()}
+
+"""
+运行前注意： 
+1、coordinates的不同feature
+2、预估时间以计算跳过的推文数量,一天约70万条推文
+3、更改时间range或者地点
+4、检查需要记录的feature
+
+"""
 
 
 class TwitterProcessor:
@@ -11,7 +27,7 @@ class TwitterProcessor:
         self,
         input_file,
         output_file,
-        feature=["coordinates", "text", "created_at", "lang", "hashTags", "place_type"],
+        feature=["coordinates", "location", "text", "created_at", "lang", "hashTags"],
     ):
         self.input_file = Path(input_file)
         self.output_file = Path(output_file)
@@ -41,17 +57,23 @@ class TwitterProcessor:
 
                 for tweet in parser:
                     self.processed_count += 1
+                    '''
+                    if self.processed_count <= 7:
+                        print(tweet)'''
                     # if self.processed_count == 1:
                     #    print(tweet['country_code'])
-                    if self.processed_count % 1000000 == 0:
+                    if self. processed_count<20000000:
+                        continue
+                    if self.processed_count % 10000000 == 0:
                         print(
-                            f"已处理: {self.processed_count:,} 条记录, 英国推文: {self.uk_tweets_count:,} 条"
+                            f"已处理: {self.processed_count:,} 条记录, 符合条件的推文: {self.uk_tweets_count:,} 条"
                         )
 
-                    # 检查是否为英国推文
-                    if self._is_uk_tweet(tweet):
+                    """检查是否符合初始条件（时间 地点等）"""
+                    if self._is_time_tweet(tweet):
                         self.uk_tweets_count += 1
                         self._write_tweet_to_csv(tweet, csv_writer)
+
 
         except FileNotFoundError:
             print(f"错误: 找不到输入文件 {self.input_file}")
@@ -63,7 +85,7 @@ class TwitterProcessor:
 
         print(f"\n处理完成!")
         print(f"总处理记录: {self.processed_count:,}")
-        print(f"英国推文数量: {self.uk_tweets_count:,}")
+        print(f"时间范围内推文数量: {self.uk_tweets_count:,}")
         print(f"筛选率: {(self.uk_tweets_count/self.processed_count)*100:.2f}%")
 
         return True
@@ -97,10 +119,33 @@ class TwitterProcessor:
         ]
 
         return any(keyword in location for keyword in uk_keywords)
+    
+    def _is_time_tweet(self, tweet, filtered_time = ["2017-06-19", "2017-06-20"]) -> bool:
+        """check if the tweet created at the time range
+            time_str:  Sun Jan 21 21:37:56 +0000 2018
+        """
+        time_str = tweet.get("created_at","")
+        # corse filter
+        if time_str == "":
+            return False
+        # print(f"月份为:{time_str[4:7]}.")
+        if time_str[4:7] != num_month_map[int(filtered_time[0][5:7])]:
+            return False
+
+        if compare_date(time_str, filtered_time[0]) ==-1:
+            return False
+        if compare_date(time_str, filtered_time[1]) ==1:
+            return False
+        if compare_by_date_range(time_str, filtered_time[0], filtered_time[1]):
+            return True
+        
+        return False
+        
 
     def _write_tweet_to_csv(self, tweet, csv_writer):
         """将推文数据写入CSV"""
         coordinates = self._extract_coordinates(tweet)
+        location = tweet.get("location","")
         created_at = tweet.get("created_at", "")
         lang = tweet.get("lang", "")
         text = tweet.get("text", "").replace("\n", " ").replace("\r", " ")
@@ -110,13 +155,12 @@ class TwitterProcessor:
             text = result.text
         """
         hashtags = self._extract_hashtags_text(tweet)
-        place_type = tweet.get("place_type", "")
 
         # 写入CSV行
-        csv_writer.writerow([coordinates, text, created_at, lang, hashtags, place_type])
+        csv_writer.writerow([coordinates, location, text, created_at, lang, hashtags])
 
     def _extract_hashtags_text(self, tweet):
-        raw = tweet.get("hashTags", "")
+        raw = tweet.get("hashtags", "")
         if not raw:
             return ""
         if isinstance(raw, str):
@@ -151,86 +195,15 @@ class TwitterProcessor:
                 coords = coordinates["coordinates"]
                 if isinstance(coords, list) and len(coords) >= 2:
                     return f"{coords[1]},{coords[0]}"  # lat,lng格式
-        """
-        # 检查geo字段 - 注意这里可能是字符串格式
-        geo = tweet.get('geo')
-        if geo:
-            if isinstance(geo, str):
-                # 如果是字符串格式，需要解析
-                try:
-                    geo_data = json.loads(geo)
-                    if isinstance(geo_data, dict) and geo_data.get('coordinates'):
-                        coords = geo_data['coordinates']
-                        if isinstance(coords, list) and len(coords) >= 2:
-                            return f"{coords[0]},{coords[1]}"  # lat,lng格式
-                except (json.JSONDecodeError, IndexError):
-                    pass
-            elif isinstance(geo, dict) and geo.get('coordinates'):
-                # 如果是字典格式
-                coords = geo['coordinates']
-                if isinstance(coords, list) and len(coords) >= 2:
-                    return f"{coords[0]},{coords[1]}"  # lat,lng格式
-            
-        # 检查place的bounding_box - 注意这里可能是字符串格式
-        place = tweet.get('place')
-        if place and place.get('bounding_box'):
-            bbox = place['bounding_box']
-            if isinstance(bbox, str):
-                # 如果是字符串格式，需要解析
-                try:
-                    bbox_data = json.loads(bbox)
-                    if isinstance(bbox_data, dict) and bbox_data.get('coordinates'):
-                        bbox_coords = bbox_data['coordinates'][0]
-                        if bbox_coords:
-                            # 计算边界框中心点
-                            lngs = [coord[0] for coord in bbox_coords]
-                            lats = [coord[1] for coord in bbox_coords]
-                            center_lng = sum(lngs) / len(lngs)
-                            center_lat = sum(lats) / len(lats)
-                            return f"{center_lat},{center_lng}"
-                except (json.JSONDecodeError, IndexError):
-                    pass
-            elif isinstance(bbox, dict) and bbox.get('coordinates'):
-                # 如果是字典格式
-                bbox_coords = bbox['coordinates'][0]
-                if bbox_coords:
-                    # 计算边界框中心点
-                    lngs = [coord[0] for coord in bbox_coords]
-                    lats = [coord[1] for coord in bbox_coords]
-                    center_lng = sum(lngs) / len(lngs)
-                    center_lat = sum(lats) / len(lats)
-                    return f"{center_lat},{center_lng}"
-        
-        # 检查根级别的bounding_box字段
-        bbox = tweet.get('bounding_box')
-        if bbox:
-            if isinstance(bbox, str):
-                # 如果是字符串格式，需要解析
-                try:
-                    bbox_data = json.loads(bbox)
-                    if isinstance(bbox_data, dict) and bbox_data.get('coordinates'):
-                        bbox_coords = bbox_data['coordinates'][0]
-                        if bbox_coords:
-                            # 计算边界框中心点
-                            lngs = [coord[0] for coord in bbox_coords]
-                            lats = [coord[1] for coord in bbox_coords]
-                            center_lng = sum(lngs) / len(lngs)
-                            center_lat = sum(lats) / len(lats)
-                            return f"{center_lat},{center_lng}"
-                except (json.JSONDecodeError, IndexError):
-                    pass
-            elif isinstance(bbox, dict) and bbox.get('coordinates'):
-                # 如果是字典格式
-                bbox_coords = bbox['coordinates'][0]
-                if bbox_coords:
-                    # 计算边界框中心点
-                    lngs = [coord[0] for coord in bbox_coords]
-                    lats = [coord[1] for coord in bbox_coords]
-                    center_lng = sum(lngs) / len(lngs)
-                    center_lat = sum(lats) / len(lats)
-                    return f"{center_lat},{center_lng}"
-        """
+        geo = tweet.get("geo")
+        if geo and isinstance(geo, dict):
+            coords = geo.get("coordinates")
+            if isinstance(coords, list) and len(coords) >= 2:
+                # geo字段中坐标通常是[lat, lng]格式，不需要交换顺序
+                return f"{coords[0]},{coords[1]}"
+    
         return ""  # 无坐标信息
+        
 
 
 def main():
