@@ -25,7 +25,7 @@ def convert_twitter_time(time_str: str, output_format: str = "%Y-%m-%d") -> str:
         print(f"时间格式转换失败: {e}")
         return ""
 
-def compare_date(twitter_time: str, target_date: str) -> int:
+def compare_date(twitter_time: str, target_date: str, time_format: str = "%Y-%m-%d") -> int:
     """
     比较Twitter时间与目标日期
     
@@ -46,8 +46,8 @@ def compare_date(twitter_time: str, target_date: str) -> int:
             return 99
         
         # 转换为date对象进行比较
-        twitter_date = datetime.strptime(twitter_date_str, "%Y-%m-%d").date()
-        target_date_obj = datetime.strptime(target_date, "%Y-%m-%d").date()
+        twitter_date = datetime.strptime(twitter_date_str, time_format).date()
+        target_date_obj = datetime.strptime(target_date, time_format).date()
         
         if twitter_date < target_date_obj:
             return -1

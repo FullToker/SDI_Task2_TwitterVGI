@@ -288,8 +288,8 @@ if __name__ == "__main__":
     file_path = "/media/ys_tum/T7 Shield/tweets_europe_west_2017_05_17.json"
 
     print("使用自定义解析器读取最后20个项目...")
-    items = find_last_items(file_path, num_items=20)
-    print_items_info(items)
+    items = find_last_items(file_path, num_items=5)
+    print_items_info(items, show_full=True)
     """
     # 方法1：自定义解析器
     print("使用自定义解析器...")
