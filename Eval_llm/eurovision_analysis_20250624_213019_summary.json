@@ -1,0 +1,10 @@
+{
+  "total_tweets_analyzed": 100,
+  "batch_processing_time_seconds": 775.4823882579803,
+  "api_total_tokens_used": 32763,
+  "api_average_tokens_per_tweet": 327.63,
+  "api_total_processing_time_seconds": 675.3579747676849,
+  "api_average_time_per_tweet_seconds": 6.7535797476768495,
+  "traditional_total_processing_time_seconds": 0.001321554183959961,
+  "traditional_average_time_per_tweet_seconds": 1.321554183959961e-05
+}
